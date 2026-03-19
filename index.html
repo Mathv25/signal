@@ -1809,11 +1809,13 @@ Analyse "${ticker}". JSON uniquement, sans texte ni markdown avant ou apres:
 
   } catch (err) {
     console.error(err);
-    document.getElementById('results').innerHTML = `
-      <div class="analysis-card">
-        <div class="section-label">// Erreur</div>
-        <div class="analysis-text">Impossible d'analyser ce titre pour le moment. Vérifiez le symbole et réessayez.</div>
-      </div>`;
+    var errMsg = err.message || '';
+    var userMsg = errMsg.includes('429') 
+      ? '⏳ Limite API atteinte — attends 60 secondes et réessaie. (Trop de requêtes en peu de temps)'
+      : errMsg.includes('No API key')
+      ? '🔑 Entre ta clé API Anthropic en haut de la page.'
+      : 'Impossible d\'analyser ce titre. Vérifiez le symbole et réessayez. (' + errMsg + ')';
+    document.getElementById('results').innerHTML = '<div class="analysis-card"><div class="section-label">// Erreur</div><div class="analysis-text">' + userMsg + '</div></div>';
     document.getElementById('results').classList.add('active');
   }
 
@@ -2055,7 +2057,7 @@ function showTVScreen(mode, tabEl) {
 // ── NEWS FLASH ───────────────────────────────────────────────
 async function loadMarketNews() {
   if (!ANTHROPIC_KEY) {
-    document.getElementById('newsItems').innerHTML = '<div class="news-error">⚡ Entre ta clé API en haut de la page pour charger les news.</div>';
+    document.getElementById('newsItems').innerHTML = '<div class="news-error">⚡ Entre ta clé API en haut de la page, puis clique REFRESH.</div>';
     return;
   }
   var btn = document.getElementById('newsRefreshBtn');
@@ -2542,8 +2544,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Enter') analyze();
   });
 
-  loadMarketNews();
-  // Fear & Greed loads on manual refresh only - saves API rate limit
+  // News and Fear & Greed load on manual click only - prevents 429 on page load
 });
 </script>
 </body>
