@@ -2054,6 +2054,10 @@ function showTVScreen(mode, tabEl) {
 
 // ── NEWS FLASH ───────────────────────────────────────────────
 async function loadMarketNews() {
+  if (!ANTHROPIC_KEY) {
+    document.getElementById('newsItems').innerHTML = '<div class="news-error">⚡ Entre ta clé API en haut de la page pour charger les news.</div>';
+    return;
+  }
   var btn = document.getElementById('newsRefreshBtn');
   var container = document.getElementById('newsItems');
   var tsEl = document.getElementById('newsTimestamp');
@@ -2185,27 +2189,9 @@ async function loadFearGreed() {
     console.log('Crypto F&G error:', e);
   }
 
-  // Stock market F&G - use VIX proxy via Yahoo Finance
-  var stockScore = null, stockLabel = null;
-  try {
-    var vixUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=1d');
-    var resp2 = await fetch(vixUrl);
-    var proxyData = await resp2.json();
-    var vixData = JSON.parse(proxyData.contents);
-    var vix = vixData.chart.result[0].meta.regularMarketPrice;
-    // Convert VIX to F&G score (inverse relationship)
-    // VIX < 12 = extreme greed, VIX 12-15 = greed, VIX 15-20 = neutral
-    // VIX 20-25 = fear, VIX > 25 = extreme fear
-    if (vix <= 12) stockScore = Math.round(80 + (12-vix)*2);
-    else if (vix <= 15) stockScore = Math.round(65 + (15-vix)*5);
-    else if (vix <= 20) stockScore = Math.round(45 + (20-vix)*4);
-    else if (vix <= 25) stockScore = Math.round(30 - (vix-20)*3);
-    else stockScore = Math.max(5, Math.round(25 - (vix-25)*2));
-    stockScore = Math.max(1, Math.min(99, stockScore));
-    stockLabel = 'VIX: ' + vix.toFixed(1);
-  } catch(e) {
-    console.log('Stock F&G error:', e);
-  }
+  // Stock F&G: no free CORS-enabled source available
+  // Show placeholder - crypto F&G is the primary indicator
+  var stockScore = null, stockLabel = 'Source indisponible';
 
   // Build HTML
   var html = '';
@@ -2225,18 +2211,12 @@ async function loadFearGreed() {
   }
 
   // Stock card
-  if (stockScore !== null) {
-    var sc = fgClass(stockScore);
-    html += '<div class="fg-card">'
-      + '<div class="fg-card-label">📈 BOURSE (VIX)</div>'
-      + fgGauge(stockScore, sc)
-      + '<div class="fg-score ' + sc + '">' + stockScore + '</div>'
-      + '<div class="fg-label ' + sc + '">' + fgLabel(stockScore) + '</div>'
-      + '<div class="fg-prev">' + (stockLabel || '') + '</div>'
-      + '</div>';
-  } else {
-    html += '<div class="fg-card"><div class="fg-card-label">📈 BOURSE (VIX)</div><div class="fg-prev" style="margin-top:20px">Indisponible</div></div>';
-  }
+  // Stock F&G card - show CNN widget link instead
+  html += '<div class="fg-card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;">'
+    + '<div class="fg-card-label">📈 BOURSE</div>'
+    + '<div style="font-family:monospace;font-size:11px;color:#555;text-align:center;line-height:1.6;">Voir CNN Fear & Greed</div>'
+    + '<a href="https://money.cnn.com/data/fear-and-greed/" target="_blank" style="font-family:monospace;font-size:10px;color:#00bfff;text-decoration:none;border:1px solid #00bfff;padding:6px 12px;border-radius:3px;">↗ OUVRIR CNN</a>'
+    + '</div>';
 
   container.innerHTML = html;
   container.style.display = 'grid';
