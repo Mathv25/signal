@@ -283,32 +283,32 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div id="tv-volume" class="tv-screen active">
       <div class="tradingview-widget-container" style="height:380px;">
         <div class="tradingview-widget-container__widget" style="height:100%;"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        {"width":"100%","height":380,"defaultColumn":"overview","defaultScreen":"most_active","market":"america","showToolbar":true,"colorTheme":"dark","locale":"fr","isTransparent":true,"filters":[{"col":"market_cap_basic","op":"GreaterEqual","val":10000000000}]}
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js" async>
+        {"colorTheme":"dark","dateRange":"1D","showChart":true,"locale":"fr","largeChartUrl":"","isTransparent":true,"showSymbolLogo":false,"showFloatingTooltip":false,"width":"100%","height":380,"tabs":[{"title":"Volume Extrême — Large Cap","symbols":[{"s":"NYSE:JPM"},{"s":"NASDAQ:AAPL"},{"s":"NASDAQ:NVDA"},{"s":"NASDAQ:MSFT"},{"s":"NYSE:BAC"},{"s":"NASDAQ:AMZN"},{"s":"NASDAQ:META"},{"s":"NYSE:XOM"},{"s":"NASDAQ:GOOGL"},{"s":"NYSE:WMT"}],"originalTitle":"Volume"}]}
         </script>
       </div>
     </div>
     <div id="tv-gainers" class="tv-screen">
       <div class="tradingview-widget-container" style="height:380px;">
         <div class="tradingview-widget-container__widget" style="height:100%;"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        {"width":"100%","height":380,"defaultColumn":"overview","defaultScreen":"top_gainers","market":"america","showToolbar":true,"colorTheme":"dark","locale":"fr","isTransparent":true,"filters":[{"col":"market_cap_basic","op":"GreaterEqual","val":10000000000}]}
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js" async>
+        {"colorTheme":"dark","dateRange":"1D","showChart":true,"locale":"fr","largeChartUrl":"","isTransparent":true,"showSymbolLogo":false,"showFloatingTooltip":false,"width":"100%","height":380,"tabs":[{"title":"Top Hausses — Large Cap","symbols":[{"s":"NASDAQ:TSLA"},{"s":"NASDAQ:NVDA"},{"s":"NYSE:GS"},{"s":"NYSE:MS"},{"s":"NASDAQ:AAPL"},{"s":"NYSE:JPM"},{"s":"NASDAQ:AMD"},{"s":"NASDAQ:AMZN"},{"s":"NASDAQ:NFLX"},{"s":"NYSE:V"}],"originalTitle":"Gainers"}]}
         </script>
       </div>
     </div>
     <div id="tv-losers" class="tv-screen">
       <div class="tradingview-widget-container" style="height:380px;">
         <div class="tradingview-widget-container__widget" style="height:100%;"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        {"width":"100%","height":380,"defaultColumn":"overview","defaultScreen":"top_losers","market":"america","showToolbar":true,"colorTheme":"dark","locale":"fr","isTransparent":true,"filters":[{"col":"market_cap_basic","op":"GreaterEqual","val":10000000000}]}
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js" async>
+        {"colorTheme":"dark","dateRange":"1D","showChart":true,"locale":"fr","largeChartUrl":"","isTransparent":true,"showSymbolLogo":false,"showFloatingTooltip":false,"width":"100%","height":380,"tabs":[{"title":"Top Baisses — Large Cap","symbols":[{"s":"NASDAQ:INTC"},{"s":"NYSE:PFE"},{"s":"NASDAQ:PARA"},{"s":"NYSE:T"},{"s":"NYSE:BA"},{"s":"NASDAQ:WBD"},{"s":"NYSE:CVS"},{"s":"NASDAQ:BIIB"},{"s":"NYSE:F"},{"s":"NYSE:GM"}],"originalTitle":"Losers"}]}
         </script>
       </div>
     </div>
     <div id="tv-crypto" class="tv-screen">
       <div class="tradingview-widget-container" style="height:380px;">
         <div class="tradingview-widget-container__widget" style="height:100%;"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
-        {"dataSource":"Crypto","blockSize":"market_cap_basic","blockColor":"change","locale":"fr","colorTheme":"dark","hasTopBar":false,"isDataSetEnabled":false,"isZoomEnabled":true,"hasSymbolTooltip":true,"width":"100%","height":380,"isTransparent":true}
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js" async>
+        {"colorTheme":"dark","dateRange":"1D","showChart":true,"locale":"fr","largeChartUrl":"","isTransparent":true,"showSymbolLogo":false,"showFloatingTooltip":false,"width":"100%","height":380,"tabs":[{"title":"Crypto — Top Cap","symbols":[{"s":"BINANCE:BTCUSDT"},{"s":"BINANCE:ETHUSDT"},{"s":"BINANCE:SOLUSDT"},{"s":"BINANCE:BNBUSDT"},{"s":"BINANCE:XRPUSDT"},{"s":"BINANCE:ADAUSDT"},{"s":"BINANCE:DOGEUSDT"},{"s":"BINANCE:AVAXUSDT"},{"s":"BINANCE:DOTUSDT"},{"s":"BINANCE:LINKUSDT"}],"originalTitle":"Crypto"}]}
         </script>
       </div>
     </div>
@@ -487,7 +487,7 @@ async function loadNews() {
   const today = new Date().toLocaleDateString('fr-CA');
   try {
     const resp = await callAI({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{ role: 'user', content: 'Search todays top 5 high-impact market news (' + today + '): macro, Fed, Trump, crypto, oil, earnings. JSON array only: [{"headline":"French max 110 chars","source":"X","time":"Xh ago","impact":"HIGH","cat":"MACRO"}]. Categories: TRUMP/FED/ENERGIE/GEO/CRYPTO/MACRO/EARNINGS/TECH. Impact: HIGH/MEDIUM/LOW.' }]
@@ -610,7 +610,7 @@ async function analyze() {
 
   try {
     const resp = await callAI({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1500,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{ role: 'user', content: prompt }]
@@ -746,7 +746,7 @@ async function runValueScan() {
 
   try {
     const resp = await callAI({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       system: 'You are a financial data API. Output only valid JSON starting with {. No text, no disclaimers, no markdown.',
       messages: [{ role: 'user', content: 'List 10 stocks to buy based on: P/E reasonable for sector, PEG<1.5, EPS growth>8%/yr, D/E<1.0, market cap>2B USD, positive FCF, diverse sectors, RSI 35-60. Output JSON only: {"stocks":[{"rank":1,"ticker":"AAPL","name":"Apple Inc","sector":"Tech","marketCap":"3.1T","price":213.50,"pe":27.5,"peg":1.3,"epsGrowth":"+15%","debtEquity":0.30,"rsi":45,"dividend":"0.6%","grade":"A","buyReason":"Strong FCF and AI growth","catalysts":"AI expansion","risk":"Premium valuation","score":82}]}' }]
