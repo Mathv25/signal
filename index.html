@@ -503,85 +503,100 @@ function parseJSONArray(text) {
   return null;
 }
 
-// ── YAHOO FINANCE ─────────────────────────────────────────────
+// ── LIVE PRICE — Binance (crypto) / Claude web_search (stocks) ─
+const BINANCE_MAP = {BTC:'BTCUSDT',ETH:'ETHUSDT',SOL:'SOLUSDT',BNB:'BNBUSDT',XRP:'XRPUSDT',ADA:'ADAUSDT',DOGE:'DOGEUSDT',AVAX:'AVAXUSDT',DOT:'DOTUSDT',MATIC:'MATICUSDT',LINK:'LINKUSDT'};
+
 async function fetchLivePrice(ticker, market) {
-  let symbol = ticker;
-  if (market === 'TSX') symbol = ticker + '.TO';
-  else if (market === 'CRYPTO') {
-    const map = {BTC:'BTC-USD',ETH:'ETH-USD',SOL:'SOL-USD',BNB:'BNB-USD',XRP:'XRP-USD',ADA:'ADA-USD',DOGE:'DOGE-USD',AVAX:'AVAX-USD',DOT:'DOT-USD',MATIC:'MATIC-USD',LINK:'LINK-USD'};
-    symbol = map[ticker] || (ticker + '-USD');
-  } else if (market === 'FOREX') {
-    symbol = ticker.replace('/','') + '=X';
-  }
+  if (market !== 'CRYPTO') return null; // Stocks: Claude web_search handles price
+  const symbol = BINANCE_MAP[ticker.toUpperCase()];
+  if (!symbol) return null;
   try {
-    const proxy = 'https://api.allorigins.win/get?url=';
-    const yahooUrl = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/' + symbol + '?interval=1d&range=5d');
-    const resp = await fetch(proxy + yahooUrl);
-    if (!resp.ok) throw new Error('proxy error');
-    const raw = await resp.json();
-    const parsed = JSON.parse(raw.contents);
-    const meta = parsed?.chart?.result?.[0]?.meta;
-    if (!meta) throw new Error('no meta');
-    const price = meta.regularMarketPrice;
-    const prev = meta.chartPreviousClose || meta.previousClose;
-    const change = prev ? price - prev : null;
-    const changePct = prev ? ((change / prev) * 100) : null;
+    const resp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=' + symbol);
+    if (!resp.ok) throw new Error('binance');
+    const d = await resp.json();
+    const price = parseFloat(d.lastPrice);
+    const changePct = parseFloat(d.priceChangePercent);
+    const change = parseFloat(d.priceChange);
     return {
-      price, prev,
-      change: change ? change.toFixed(2) : null,
-      changePct: changePct !== null ? (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%' : null,
+      price,
+      prev: price - change,
+      change: change.toFixed(2),
+      changePct: (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%',
       changePctRaw: changePct,
-      currency: meta.currency || 'USD',
-      symbol: meta.symbol || symbol,
-      marketState: meta.marketState || 'UNKNOWN'
+      currency: 'USD',
+      symbol: symbol,
+      marketState: 'OPEN'
     };
   } catch(e) {
     return null;
   }
 }
 
-// ── MACRO BAR ─────────────────────────────────────────────────
-async function loadMacroBar() {
-  const assets = [
-    {id:'SPY', market:'US'},
-    {id:'QQQ', market:'US'},
-    {id:'VIX', market:'US', symbol:'^VIX'},
-    {id:'BTC', market:'CRYPTO'},
-    {id:'ETH', market:'CRYPTO'}
-  ];
-  const results = await Promise.allSettled(assets.map(a => fetchLivePrice(a.id, a.market)));
-  let bullCount = 0, bearCount = 0;
+// ── MACRO BAR — Binance for BTC/ETH, Claude web_search for stocks ─
+function updateMacroCard(id, d, bullArr, bearArr, isVix) {
+  const pEl = document.getElementById('m-' + id + '-p');
+  const cEl = document.getElementById('m-' + id + '-c');
+  if (!pEl || !cEl) return;
+  macroData[id] = d;
+  pEl.textContent = d.price >= 1000 ? '$' + Math.round(d.price).toLocaleString() : '$' + d.price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  pEl.classList.remove('macro-loading');
+  cEl.textContent = d.changePct || '—';
+  const up = (d.changePctRaw || 0) >= 0;
+  cEl.className = 'macro-chg ' + (up ? 'up' : 'down');
+  if (isVix) { up ? bearArr.push(1) : bullArr.push(1); }
+  else { up ? bullArr.push(1) : bearArr.push(1); }
+}
 
-  results.forEach((res, i) => {
-    const a = assets[i];
-    const pEl = document.getElementById('m-' + a.id + '-p');
-    const cEl = document.getElementById('m-' + a.id + '-c');
-    if (!pEl || !cEl) return;
-    if (res.status === 'fulfilled' && res.value) {
-      const d = res.value;
-      macroData[a.id] = d;
-      pEl.textContent = d.price >= 1000 ? '$' + Math.round(d.price).toLocaleString() : '$' + d.price.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2});
-      pEl.classList.remove('macro-loading');
-      if (d.changePct) {
-        cEl.textContent = d.changePct;
-        const up = (d.changePctRaw || 0) >= 0;
-        cEl.className = 'macro-chg ' + (up ? 'up' : 'down');
-        if (a.id !== 'VIX') { up ? bullCount++ : bearCount++; }
-        else { up ? bearCount++ : bullCount++; } // VIX up = bearish
-      }
-    } else {
-      pEl.textContent = '—';
-      cEl.textContent = '—';
-    }
-  });
-
-  // Compute macro bias
+function renderMacroBias(bullCount, bearCount) {
   const biasEl = document.getElementById('macroBiasBar');
   let biasClass, biasText;
-  if (bullCount >= 3) { biasClass = 'bullish'; biasText = '▲ BIAIS MACRO HAUSSIER — Conditions favorables aux positions longues'; }
-  else if (bearCount >= 3) { biasClass = 'bearish'; biasText = '▼ BIAIS MACRO BAISSIER — Prudence sur les positions longues'; }
+  if (bullCount >= 2) { biasClass = 'bullish'; biasText = '▲ BIAIS MACRO HAUSSIER — Conditions favorables aux positions longues'; }
+  else if (bearCount >= 2) { biasClass = 'bearish'; biasText = '▼ BIAIS MACRO BAISSIER — Prudence sur les positions longues'; }
   else { biasClass = 'neutral'; biasText = '◆ BIAIS MACRO NEUTRE — Marché mixte, gestion du risque prioritaire'; }
   biasEl.innerHTML = '<div class="macro-bias ' + biasClass + '"><span>' + biasText + '</span></div>';
+}
+
+async function loadMacroBar() {
+  if (!KEY) return; // Need API key for stock prices via Claude
+  const bull = [], bear = [];
+
+  // Crypto via Binance (no CORS issue)
+  const [btcData, ethData] = await Promise.all([
+    fetchLivePrice('BTC', 'CRYPTO'),
+    fetchLivePrice('ETH', 'CRYPTO')
+  ]);
+  if (btcData) updateMacroCard('BTC', btcData, bull, bear, false);
+  if (ethData) updateMacroCard('ETH', ethData, bull, bear, false);
+
+  // Stocks + VIX via Claude web_search (single call, no CORS)
+  try {
+    const today = new Date().toLocaleDateString('fr-CA');
+    const resp = await callAI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      system: 'You are a financial data API. Output only valid JSON. No text, no markdown.',
+      messages: [{role:'user', content: 'Search current prices for SPY, QQQ, VIX right now (' + today + '). JSON only: {"SPY":{"price":0,"changePct":"+0.00%","changePctRaw":0.0},"QQQ":{"price":0,"changePct":"+0.00%","changePctRaw":0.0},"VIX":{"price":0,"changePct":"+0.00%","changePctRaw":0.0}}'}]
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = getText(data);
+      const parsed = parseJSON(text);
+      if (parsed) {
+        ['SPY','QQQ','VIX'].forEach(id => {
+          if (parsed[id] && parsed[id].price) {
+            const d = {
+              price: parsed[id].price,
+              changePct: parsed[id].changePct || '—',
+              changePctRaw: parsed[id].changePctRaw || 0
+            };
+            updateMacroCard(id, d, bull, bear, id === 'VIX');
+          }
+        });
+      }
+    }
+  } catch(e) { /* silent fail */ }
+
+  renderMacroBias(bull.length, bear.length);
 }
 
 // ── FEAR & GREED ──────────────────────────────────────────────
