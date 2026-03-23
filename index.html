@@ -771,7 +771,7 @@ async function runValueScan() {
 
     const rows = parsed.stocks.map(s => {
       const gc = s.grade === 'A' ? 'grade-a' : s.grade === 'B' ? 'grade-b' : 'grade-c';
-      '<div class="value-row ' + gc + '" data-ticker="' + s.ticker + '" onclick="toggleDetail(this.dataset.ticker)">' +
+      return '<div class="value-row ' + gc + '" data-ticker="' + s.ticker + '" onclick="toggleDetail(this.dataset.ticker)">' +
         '<div class="v-rank">' + s.rank + '</div>' +
         '<div><div class="v-ticker">' + s.ticker + '</div><div class="v-sector">' + (s.sector||'') + '</div></div>' +
         '<div><div class="v-name">' + s.name + '</div><div style="font-size:8px;color:var(--muted);">' + (s.marketCap||'') + (s.dividend ? ' · ' + s.dividend : '') + '</div></div>' +
