@@ -537,6 +537,49 @@ function quickAnalyze(ticker) {
   analyze();
 }
 
+// ── YAHOO FINANCE LIVE PRICE ──────────────────────────────────
+async function fetchLivePrice(ticker, market) {
+  // Build Yahoo symbol from market type
+  let symbol = ticker;
+  if (market === 'TSX') symbol = ticker + '.TO';
+  else if (market === 'CRYPTO') {
+    const map = { BTC: 'BTC-USD', ETH: 'ETH-USD', SOL: 'SOL-USD', BNB: 'BNB-USD', XRP: 'XRP-USD', ADA: 'ADA-USD', DOGE: 'DOGE-USD', AVAX: 'AVAX-USD', DOT: 'DOT-USD', MATIC: 'MATIC-USD' };
+    symbol = map[ticker] || (ticker + '-USD');
+  } else if (market === 'FOREX') {
+    // e.g. EURUSD → EURUSD=X
+    symbol = ticker.replace('/','') + '=X';
+  }
+
+  try {
+    const proxy = 'https://api.allorigins.win/get?url=';
+    const yahooUrl = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/' + symbol + '?interval=1d&range=5d');
+    const resp = await fetch(proxy + yahooUrl);
+    if (!resp.ok) throw new Error('Proxy error');
+    const raw = await resp.json();
+    const parsed = JSON.parse(raw.contents);
+    const meta = parsed?.chart?.result?.[0]?.meta;
+    if (!meta) throw new Error('No data');
+
+    const price = meta.regularMarketPrice;
+    const prev = meta.chartPreviousClose || meta.previousClose;
+    const change = prev ? price - prev : null;
+    const changePct = prev ? ((change / prev) * 100) : null;
+
+    return {
+      price: price,
+      prev: prev,
+      change: change ? change.toFixed(2) : null,
+      changePct: changePct ? (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%' : null,
+      currency: meta.currency || 'USD',
+      symbol: meta.symbol || symbol,
+      marketState: meta.marketState || 'UNKNOWN'
+    };
+  } catch(e) {
+    console.warn('Yahoo Finance fetch failed:', e.message);
+    return null;
+  }
+}
+
 // ── ANALYZE ───────────────────────────────────────────────────
 function fmtUSD(v) {
   if (!v && v !== 0) return '—';
@@ -554,7 +597,16 @@ async function analyze() {
   document.getElementById('loadingText').textContent = 'RECHERCHE DONNÉES + ANALYSE...';
 
   const today = new Date().toLocaleDateString('fr-CA');
-  const prompt = 'Search current price and technical data for ' + ticker + ' on ' + market + ' market (' + today + ', TF: ' + TF_LABELS[selectedTF] + '). Then provide full technical analysis. Detect if this is a potential bull reversal setup (RSI oversold turning up, higher low, volume spike) or bear setup. Respond ONLY with this JSON, no text before or after:\n{"ticker":"","fullName":"","signal":"ACHAT|VENTE|NEUTRE|ATTENDRE","confidence":0,"trend":"HAUSSIERE|BAISSIERE|LATERALE","momentum":"FORT|MOYEN|FAIBLE","setupType":"BULL_REVERSAL|BEAR_REVERSAL|BREAKOUT|NEUTRE","setupScore":0,"entryPrice":0,"entryReason":"","targetPrice":0,"stopLoss":0,"riskReward":"1:X","riskRewardScore":0,"rsi":"","rsiSignal":"bullish|bearish|neutral","macd":"","macdSignal":"bullish|bearish|neutral","ma200":"","ma200Signal":"bullish|bearish|neutral","volume":"","volumeSignal":"bullish|bearish|neutral","support":0,"resistance":0,"vwap":0,"vwapSignal":"bullish|bearish|neutral","vwapNote":"","bollingerUpper":0,"bollingerMiddle":0,"bollingerLower":0,"bollingerSignal":"bullish|bearish|neutral","bollingerNote":"","fib382":0,"fib500":0,"fib618":0,"analystConsensus":"BUY|HOLD|SELL","analystTarget":0,"analystCount":0,"recentNews":"","livePrice":0,"priceChange":"","dataDate":"' + today + '","analysis":"4-5 sentences","timing":"","warning":null}';
+
+  // Fetch live price from Yahoo Finance first
+  document.getElementById('loadingText').textContent = 'RÉCUPÉRATION DU PRIX EN DIRECT...';
+  const liveData = await fetchLivePrice(ticker, market);
+  const livePriceContext = liveData
+    ? '\n\nLIVE PRICE DATA (from Yahoo Finance, use these exact values):\n- Current Price: ' + liveData.price + ' ' + liveData.currency + '\n- Change: ' + (liveData.change || 'N/A') + ' (' + (liveData.changePct || 'N/A') + ')\n- Previous Close: ' + (liveData.prev || 'N/A') + '\n- Market State: ' + liveData.marketState + '\n- Symbol: ' + liveData.symbol + '\n\nIMPORTANT: Use ' + liveData.price + ' as the livePrice and entryPrice base. Do NOT use any other price.'
+    : '\n\nNote: Live price fetch failed — use web search to find current price.';
+
+  document.getElementById('loadingText').textContent = 'ANALYSE TECHNIQUE EN COURS...';
+  const prompt = 'Provide full technical analysis for ' + ticker + ' on ' + market + ' market (' + today + ', TF: ' + TF_LABELS[selectedTF] + ').' + livePriceContext + '\n\nDetect if this is a potential bull reversal setup (RSI oversold turning up, higher low, volume spike) or bear setup. Use web search for RSI, MACD, moving averages, volume, support/resistance, analyst consensus. Respond ONLY with this JSON, no text before or after:\n{"ticker":"","fullName":"","signal":"ACHAT|VENTE|NEUTRE|ATTENDRE","confidence":0,"trend":"HAUSSIERE|BAISSIERE|LATERALE","momentum":"FORT|MOYEN|FAIBLE","setupType":"BULL_REVERSAL|BEAR_REVERSAL|BREAKOUT|NEUTRE","setupScore":0,"entryPrice":0,"entryReason":"","targetPrice":0,"stopLoss":0,"riskReward":"1:X","riskRewardScore":0,"rsi":"","rsiSignal":"bullish|bearish|neutral","macd":"","macdSignal":"bullish|bearish|neutral","ma200":"","ma200Signal":"bullish|bearish|neutral","volume":"","volumeSignal":"bullish|bearish|neutral","support":0,"resistance":0,"vwap":0,"vwapSignal":"bullish|bearish|neutral","vwapNote":"","bollingerUpper":0,"bollingerMiddle":0,"bollingerLower":0,"bollingerSignal":"bullish|bearish|neutral","bollingerNote":"","fib382":0,"fib500":0,"fib618":0,"analystConsensus":"BUY|HOLD|SELL","analystTarget":0,"analystCount":0,"recentNews":"","livePrice":' + (liveData ? liveData.price : 0) + ',"priceChange":"' + (liveData ? (liveData.changePct || '') : '') + '","dataDate":"' + today + '","analysis":"4-5 sentences","timing":"","warning":null}';
 
   try {
     const resp = await callAI({
