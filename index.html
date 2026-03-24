@@ -437,7 +437,6 @@ function saveApiKey() {
     document.getElementById('keyStatus').textContent = '✓ ACTIVE';
     document.getElementById('keyStatus').style.color = 'var(--up)';
     document.getElementById('apiKeyInput').value = '••••••••••••••••';
-    loadMacroBar(); // Now load full macro bar with stocks
   } else {
     document.getElementById('keyStatus').textContent = '✗ INVALIDE';
     document.getElementById('keyStatus').style.color = 'var(--down)';
@@ -508,30 +507,55 @@ function parseJSONArray(text) {
   return null;
 }
 
-// ── LIVE PRICE — Binance (crypto) / Claude web_search (stocks) ─
+// ── LIVE PRICE — Finnhub (stocks) + Binance (crypto) ─────────
+const FINNHUB_KEY = 'd719181r01qot5jci11gd719181r01qot5jci120';
 const BINANCE_MAP = {BTC:'BTCUSDT',ETH:'ETHUSDT',SOL:'SOLUSDT',BNB:'BNBUSDT',XRP:'XRPUSDT',ADA:'ADAUSDT',DOGE:'DOGEUSDT',AVAX:'AVAXUSDT',DOT:'DOTUSDT',MATIC:'MATICUSDT',LINK:'LINKUSDT'};
+const CRYPTO_IDS = {BTC:'BINANCE:BTCUSDT',ETH:'BINANCE:ETHUSDT',SOL:'BINANCE:SOLUSDT',BNB:'BINANCE:BNBUSDT',XRP:'BINANCE:XRPUSDT',ADA:'BINANCE:ADAUSDT',DOGE:'BINANCE:DOGEUSDT',AVAX:'BINANCE:AVAXUSDT',DOT:'BINANCE:DOTUSDT',MATIC:'BINANCE:MATICUSDT'};
 
 async function fetchLivePrice(ticker, market) {
-  if (market !== 'CRYPTO') return null; // Stocks: Claude web_search handles price
-  const symbol = BINANCE_MAP[ticker.toUpperCase()];
-  if (!symbol) return null;
   try {
-    const resp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=' + symbol);
-    if (!resp.ok) throw new Error('binance');
-    const d = await resp.json();
-    const price = parseFloat(d.lastPrice);
-    const changePct = parseFloat(d.priceChangePercent);
-    const change = parseFloat(d.priceChange);
-    return {
-      price,
-      prev: price - change,
-      change: change.toFixed(2),
-      changePct: (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%',
-      changePctRaw: changePct,
-      currency: 'USD',
-      symbol: symbol,
-      marketState: 'OPEN'
-    };
+    if (market === 'CRYPTO') {
+      // Binance for crypto — no CORS issue
+      const symbol = BINANCE_MAP[ticker.toUpperCase()];
+      if (!symbol) return null;
+      const resp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=' + symbol);
+      if (!resp.ok) throw new Error('binance');
+      const d = await resp.json();
+      const price = parseFloat(d.lastPrice);
+      const changePct = parseFloat(d.priceChangePercent);
+      const change = parseFloat(d.priceChange);
+      return {
+        price, prev: price - change,
+        change: change.toFixed(2),
+        changePct: (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%',
+        changePctRaw: changePct,
+        currency: 'USD', symbol, marketState: 'OPEN'
+      };
+    } else {
+      // Finnhub for stocks (US, TSX, FOREX) — native CORS, no proxy needed
+      let fhSymbol = ticker.toUpperCase();
+      if (market === 'TSX') fhSymbol = ticker.toUpperCase() + '.TO';
+      const [quoteResp, prevResp] = await Promise.all([
+        fetch('https://finnhub.io/api/v1/quote?symbol=' + fhSymbol + '&token=' + FINNHUB_KEY),
+        fetch('https://finnhub.io/api/v1/quote?symbol=' + fhSymbol + '&token=' + FINNHUB_KEY)
+      ]);
+      if (!quoteResp.ok) throw new Error('finnhub');
+      const q = await quoteResp.json();
+      if (!q.c || q.c === 0) return null; // No data
+      const price = q.c;       // current price
+      const prev = q.pc;       // previous close
+      const change = price - prev;
+      const changePct = prev > 0 ? ((change / prev) * 100) : 0;
+      return {
+        price, prev,
+        change: change.toFixed(2),
+        changePct: (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%',
+        changePctRaw: changePct,
+        currency: 'USD', symbol: fhSymbol,
+        marketState: q.o > 0 ? 'REGULAR' : 'CLOSED',
+        high: q.h, low: q.l, open: q.o
+      };
+    }
   } catch(e) {
     return null;
   }
@@ -562,7 +586,6 @@ function renderMacroBias(bullCount, bearCount) {
 }
 
 async function loadMacroBar() {
-  if (!KEY) return; // Need API key for stock prices via Claude
   const bull = [], bear = [];
 
   // Crypto via Binance (no CORS issue)
@@ -573,33 +596,16 @@ async function loadMacroBar() {
   if (btcData) updateMacroCard('BTC', btcData, bull, bear, false);
   if (ethData) updateMacroCard('ETH', ethData, bull, bear, false);
 
-  // Stocks + VIX via Claude web_search (single call, no CORS)
-  try {
-    const today = new Date().toLocaleDateString('fr-CA');
-    const resp = await callAI({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      system: 'You are a financial data API. Output only valid JSON. No text, no markdown.',
-      messages: [{role:'user', content: 'Search current prices for SPY, QQQ, VIX right now (' + today + '). JSON only: {"SPY":{"price":0,"changePct":"+0.00%","changePctRaw":0.0},"QQQ":{"price":0,"changePct":"+0.00%","changePctRaw":0.0},"VIX":{"price":0,"changePct":"+0.00%","changePctRaw":0.0}}'}]
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      const text = getText(data);
-      const parsed = parseJSON(text);
-      if (parsed) {
-        ['SPY','QQQ','VIX'].forEach(id => {
-          if (parsed[id] && parsed[id].price) {
-            const d = {
-              price: parsed[id].price,
-              changePct: parsed[id].changePct || '—',
-              changePctRaw: parsed[id].changePctRaw || 0
-            };
-            updateMacroCard(id, d, bull, bear, id === 'VIX');
-          }
-        });
-      }
+  // Stocks + VIX via Finnhub (real-time, no Claude call needed)
+  const stockSymbols = [{id:'SPY',sym:'SPY'},{id:'QQQ',sym:'QQQ'},{id:'VIX',sym:'VIX'}];
+  const stockResults = await Promise.allSettled(
+    stockSymbols.map(s => fetchLivePrice(s.sym, 'US'))
+  );
+  stockSymbols.forEach((s, i) => {
+    if (stockResults[i].status === 'fulfilled' && stockResults[i].value) {
+      updateMacroCard(s.id, stockResults[i].value, bull, bear, s.id === 'VIX');
     }
-  } catch(e) { /* silent fail */ }
+  });
 
   renderMacroBias(bull.length, bear.length);
 }
@@ -652,7 +658,8 @@ async function loadNews() {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       tools: [{type:'web_search_20250305',name:'web_search'}],
-      messages: [{role:'user',content:'Search todays top 5 high-impact market news ('+today+'): macro, Fed, Trump, crypto, oil, earnings. JSON array only: [{"headline":"French max 110 chars","source":"X","time":"Xh ago","impact":"HIGH","cat":"MACRO"}]. Categories: TRUMP/FED/ENERGIE/GEO/CRYPTO/MACRO/EARNINGS/TECH. Impact: HIGH/MEDIUM/LOW.'}]
+      system: 'You are a news API. Output ONLY a valid JSON array starting with [. No text before or after. No markdown. No explanations.',
+      messages: [{role:'user',content:'Search and return todays top 5 market-moving news (' + today + '). Topics: Fed, inflation, earnings, crypto, oil, geopolitics, Trump. Return ONLY this JSON array format: [{"headline":"headline in French max 100 chars","source":"source name","time":"Xh ago","impact":"HIGH","cat":"MACRO"}]. cat options: TRUMP/FED/ENERGIE/GEO/CRYPTO/MACRO/EARNINGS/TECH. impact: HIGH/MEDIUM/LOW. Start your response with [ immediately.'}]
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
@@ -753,8 +760,8 @@ async function analyze() {
   document.getElementById('loadingText').textContent = 'RÉCUPÉRATION DU PRIX EN DIRECT...';
   const liveData = await fetchLivePrice(ticker, market);
   const livePriceCtx = liveData
-    ? '\n\nLIVE PRICE (Binance — confirmed real-time): Price=' + liveData.price + ' ' + liveData.currency + ', Change=' + (liveData.changePct||'N/A') + '. Use this exact price: set livePrice=' + liveData.price + ' and base entryPrice near this value.'
-    : '\n\nNo pre-fetched price available — use web search to find the current price for this ticker, then set livePrice and entryPrice accordingly.';
+    ? '\n\nLIVE PRICE (real-time, confirmed): Price=' + liveData.price + ' USD, Change=' + (liveData.changePct||'N/A') + ', PrevClose=' + (liveData.prev||'N/A') + '. THIS IS THE EXACT CURRENT PRICE — set livePrice=' + liveData.price + ' and base entryPrice on this value. Do NOT use any other price.'
+    : '\n\nNo pre-fetched price — use web search to find the exact current market price, then set livePrice and entryPrice accordingly.';
 
   // Macro context injection
   const spyChg = macroData.SPY ? macroData.SPY.changePctRaw : null;
@@ -1002,12 +1009,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadFearGreed();
   // Crypto prices load immediately via Binance (no API key needed)
   // Stock macro (SPY/QQQ/VIX) loads only if key is already saved
-  if (KEY) {
-    loadMacroBar();
-  } else {
-    // Load crypto part only (Binance), skip Claude call for stocks
-    loadMacroBarCryptoOnly();
-  }
+  loadMacroBar(); // Finnhub + Binance — no Claude key needed
   calcPosition();
 });
 </script>
