@@ -285,10 +285,16 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
       </div>
       <div id="newsContent"><div class="news-placeholder">↻ Clique REFRESH pour charger les news</div></div>
     </div>
-    <div class="fg-panel">
-      <div class="fg-title"><span class="dot dot-yellow"></span>FEAR &amp; GREED — CRYPTO</div>
-      <div class="fg-main" id="fgContent"><div class="news-placeholder">Chargement...</div></div>
-      <div class="fg-stock-link"><a href="https://money.cnn.com/data/fear-and-greed/" target="_blank">📈 BOURSE → CNN Fear & Greed ↗</a></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="fg-panel" style="flex:1;">
+        <div class="fg-title"><span class="dot dot-yellow"></span>F&amp;G — CRYPTO</div>
+        <div class="fg-main" id="fgContent"><div class="news-placeholder">Chargement...</div></div>
+      </div>
+      <div class="fg-panel" style="flex:1;">
+        <div class="fg-title"><span class="dot dot-red"></span>F&amp;G — BOURSE US</div>
+        <div class="fg-main" id="fgStockContent"><div class="news-placeholder">Chargement...</div></div>
+        <div class="fg-stock-link"><a href="https://money.cnn.com/data/fear-and-greed/" target="_blank">CNN ↗</a></div>
+      </div>
     </div>
   </div>
 
@@ -437,6 +443,7 @@ function saveApiKey() {
     document.getElementById('keyStatus').textContent = '✓ ACTIVE';
     document.getElementById('keyStatus').style.color = 'var(--up)';
     document.getElementById('apiKeyInput').value = '••••••••••••••••';
+    loadFearGreedStock();
   } else {
     document.getElementById('keyStatus').textContent = '✗ INVALIDE';
     document.getElementById('keyStatus').style.color = 'var(--down)';
@@ -641,6 +648,43 @@ async function loadFearGreed() {
       (prev!==null?'<div class="fg-prev">Hier : '+prev+' — '+fgLabel(prev)+'</div>':'');
   } catch(e) {
     el.innerHTML = '<div style="font-size:10px;color:var(--muted);">Indisponible</div>';
+  }
+}
+
+// ── FEAR & GREED — BOURSE US (CNN via Claude web_search) ─────
+async function loadFearGreedStock() {
+  const el = document.getElementById('fgStockContent');
+  if (!el || !KEY) {
+    if (el) el.innerHTML = '<div style="font-size:10px;color:var(--muted);text-align:center;">Clé API requise</div>';
+    return;
+  }
+  try {
+    const resp = await callAI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 150,
+      system: 'You are a financial data API. Output only valid JSON. No text, no markdown.',
+      tools: [{type:'web_search_20250305',name:'web_search'}],
+      messages: [{role:'user', content: 'Search CNN Fear and Greed Index current score today. Return JSON only: {"score":72,"label":"GREED","prev":65,"prevLabel":"GREED"} — score is 0-100, label is one of: EXTREME FEAR/FEAR/NEUTRAL/GREED/EXTREME GREED'}]
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = getText(data);
+    const parsed = parseJSON(text);
+    if (!parsed || !parsed.score) throw new Error('no data');
+    const score = parsed.score;
+    const label = parsed.label || '';
+    const prev = parsed.prev || null;
+    const prevLabel = parsed.prevLabel || '';
+    const cls = fgClass(score);
+    const barColor = score<=24?'#ff2d55':score<=44?'var(--accent2)':score<=55?'var(--accent3)':score<=74?'#7ed321':'var(--up)';
+    el.innerHTML =
+      '<div class="fg-score '+cls+'">'+score+'</div>'+
+      '<div class="fg-label '+cls+'">'+label+'</div>'+
+      '<div class="fg-bar"><div class="fg-bar-fill" style="width:'+score+'%;background:'+barColor+';"></div></div>'+
+      (prev!==null?'<div class="fg-prev">Hier : '+prev+' — '+prevLabel+'</div>':'');
+  } catch(e) {
+    if (el) el.innerHTML = '<div style="font-size:10px;color:var(--muted);text-align:center;">Indisponible</div>';
   }
 }
 
@@ -1007,6 +1051,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Enter') analyze();
   });
   loadFearGreed();
+  if (KEY) loadFearGreedStock();
   // Crypto prices load immediately via Binance (no API key needed)
   // Stock macro (SPY/QQQ/VIX) loads only if key is already saved
   loadMacroBar(); // Finnhub + Binance — no Claude key needed
