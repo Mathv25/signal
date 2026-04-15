@@ -324,7 +324,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const API    = 'https://api.anthropic.com/v1/messages';
-const MODEL  = 'claude-haiku-4-5-20251001';  // modele correct
+const MODEL  = 'claude-opus-4-6';  // modele correct
 let KEY = '';
 let selectedTF = '1d';
 const TF_LABELS = {'15m':'15 minutes','1h':'1 heure','4h':'4 heures','1d':'journalier','1w':'hebdomadaire'};
@@ -521,7 +521,7 @@ async function loadNews() {
   el.innerHTML='<div class="news-placeholder">Chargement...</div>';
   const today=new Date().toLocaleDateString('fr-CA');
   try {
-    const resp=await callAI({max_tokens:500,system:'News API. Output ONLY a valid JSON array starting with [. No text, no markdown.',tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:'Search top 5 market-moving news today ('+today+'). Topics: Fed, inflation, earnings, crypto, oil, geopolitics, Trump. JSON array only: [{"headline":"in French max 100 chars","source":"X","time":"Xh ago","impact":"HIGH","cat":"MACRO"}]. cat: TRUMP/FED/ENERGIE/GEO/CRYPTO/MACRO/EARNINGS/TECH. impact: HIGH/MEDIUM/LOW. Start with [.'}]});
+    const resp=await callAI({max_tokens:500,system:'News API. Output ONLY a valid JSON array starting with [. No text, no markdown.',messages:[{role:'user',content:'Search top 5 market-moving news today ('+today+'). Topics: Fed, inflation, earnings, crypto, oil, geopolitics, Trump. JSON array only: [{"headline":"in French max 100 chars","source":"X","time":"Xh ago","impact":"HIGH","cat":"MACRO"}]. cat: TRUMP/FED/ENERGIE/GEO/CRYPTO/MACRO/EARNINGS/TECH. impact: HIGH/MEDIUM/LOW. Start with [.'}]});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data=await resp.json();
     if(data.error) throw new Error(data.error.message);
@@ -545,7 +545,7 @@ async function runTop20() {
     const resp=await callAI({
       max_tokens:3000,
       system:'You are a financial analysis API. Output only valid JSON array. No text, no markdown, no explanations.',
-      tools:[{type:'web_search_20250305',name:'web_search'}],
+      
       messages:[{role:'user',content:'Date: '+today+'. Search and identify the TOP 20 US large-cap stocks (market cap >5B) with the highest profit potential right now based on ALL of: RSI oversold (30-50 turning up), volume spike vs 20-day avg, technical breakout or bull reversal setup, low P/E ratio vs sector average, undervaluation signals (P/B, EV/EBITDA, PEG<1.5), positive EPS growth, strong FCF. Use web search to find real current data. Output JSON array of exactly 20 stocks: [{"rank":1,"ticker":"AAPL","name":"Apple Inc","sector":"Tech","price":213.50,"change":"+1.2%","rsi":38,"pe":24.5,"peg":1.1,"volumeVsAvg":"1.8x","setup":"BULL_REVERSAL","grade":"A","catalysts":"Strong iPhone cycle + AI expansion","undervalueReason":"Trading below 5yr avg P/E","technicalNote":"RSI turning up from oversold, breakout above 200 EMA","risk":"Premium valuation","score":88,"tags":["RSI","BREAKOUT","VALUE"]}]'}]
     });
     if(!resp.ok) throw new Error('HTTP '+resp.status);
@@ -609,7 +609,7 @@ async function analyze() {
   document.getElementById('loadingText').textContent='ANALYSE TECHNIQUE EN COURS...';
   const prompt='Full technical + swing trade analysis for '+ticker+' ('+market+', TF: '+TF_LABELS[selectedTF]+', date: '+today+').'+livePriceCtx+macroNote+'\n\nUse web search for RSI, MACD, EMA200, volume vs avg, support/resistance, analyst consensus. Detect bull/bear reversal or breakout. Respond ONLY with valid JSON:\n{"ticker":"","fullName":"","signal":"ACHAT|VENTE|NEUTRE|ATTENDRE","confidence":0,"trend":"HAUSSIERE|BAISSIERE|LATERALE","momentum":"FORT|MOYEN|FAIBLE","setupType":"BULL_REVERSAL|BEAR_REVERSAL|BREAKOUT|NEUTRE","setupScore":0,"entryPrice":0,"entryReason":"","targetPrice":0,"stopLoss":0,"riskReward":"1:X","riskRewardScore":0,"rsi":"","rsiSignal":"bullish|bearish|neutral","macd":"","macdSignal":"bullish|bearish|neutral","ma200":"","ma200Signal":"bullish|bearish|neutral","volume":"","volumeSignal":"bullish|bearish|neutral","support":0,"resistance":0,"vwap":0,"vwapSignal":"bullish|bearish|neutral","vwapNote":"","bollingerUpper":0,"bollingerMiddle":0,"bollingerLower":0,"bollingerSignal":"bullish|bearish|neutral","bollingerNote":"","fib382":0,"fib500":0,"fib618":0,"analystConsensus":"BUY|HOLD|SELL","analystTarget":0,"analystCount":0,"recentNews":"","livePrice":'+(liveData?liveData.price:0)+',"priceChange":"'+(liveData?(liveData.changePct||''):'')+'","dataDate":"'+today+'","analysis":"4-5 sentences","timing":"","warning":null}';
   try {
-    const resp=await callAI({max_tokens:1500,system:'You are a financial analysis API. Respond ONLY with the JSON object requested. No text before or after. No markdown. No explanations. Start your response with { immediately.',tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]});
+    const resp=await callAI({max_tokens:1500,system:'You are a financial analysis API. Respond ONLY with the JSON object requested. No text before or after. No markdown. No explanations. Start your response with { immediately.',messages:[{role:'user',content:prompt}]});
     if(!resp.ok){const err=await resp.json().catch(()=>({}));throw new Error('HTTP '+resp.status+(err.error?' — '+err.error.message:''));}
     const data=await resp.json();
     if(data.error) throw new Error(data.error.message);
@@ -692,7 +692,7 @@ async function runMomentumScan() {
   scanTickers.forEach((t,i)=>{if(priceResults[i].status==='fulfilled'&&priceResults[i].value)priceMap[t.ticker]=priceResults[i].value;});
   const priceContext=Object.entries(priceMap).map(([k,v])=>k+'='+v.price+'('+(v.changePct||'0%')+')').join(', ');
   try {
-    const resp=await callAI({max_tokens:2000,system:'Trading signal API. Valid JSON array only. No text, no markdown.',tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:'Date: '+today+'. Live prices: '+priceContext+'. Use web search for RSI, momentum, volume for: BTC, ETH, SOL, NVDA, TSLA, AAPL, AMD, SMCI, MSFT, META. Identify 6 best swing trade setups today. JSON array only: [{"ticker":"NVDA","market":"US","signal":"ACHAT","setupType":"BULL_REVERSAL","price":850.00,"change":"+2.3%","rsi":32,"volume":"2.1x avg","support":820,"resistance":890,"stopLoss":815,"target":890,"rationale":"One sentence","urgency":"HIGH"}]'}]});
+    const resp=await callAI({max_tokens:2000,system:'Trading signal API. Valid JSON array only. No text, no markdown.',messages:[{role:'user',content:'Date: '+today+'. Live prices: '+priceContext+'. Use web search for RSI, momentum, volume for: BTC, ETH, SOL, NVDA, TSLA, AAPL, AMD, SMCI, MSFT, META. Identify 6 best swing trade setups today. JSON array only: [{"ticker":"NVDA","market":"US","signal":"ACHAT","setupType":"BULL_REVERSAL","price":850.00,"change":"+2.3%","rsi":32,"volume":"2.1x avg","support":820,"resistance":890,"stopLoss":815,"target":890,"rationale":"One sentence","urgency":"HIGH"}]'}]});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data=await resp.json();
     if(data.error) throw new Error(data.error.message);
