@@ -373,10 +373,15 @@ async function callAI(body) {
       body: JSON.stringify({...body, model: MODEL})
     });
     clearTimeout(timer);
-    if (resp.status === 400) { const txt=await resp.text().catch(()=>''); let msg=''; try{const e=JSON.parse(txt);msg=e.error?.message||'';}catch(x){msg=txt;} throw new Error('400 — '+(msg||txt||'Requête invalide')); }
-    if (resp.status === 429) throw new Error('429 — Limite API atteinte, attends 30s et réessaie');
-    if (resp.status === 401) throw new Error('401 — Clé API invalide');
-    if (resp.status === 529) throw new Error('529 — API surchargée, réessaie');
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      let msg = '';
+      try { const e = JSON.parse(txt); msg = e.error?.message || ''; } catch(x) { msg = txt; }
+      if (resp.status === 429) throw new Error('429 — Limite API atteinte, attends 30s');
+      if (resp.status === 401) throw new Error('401 — Clé API invalide');
+      if (resp.status === 529) throw new Error('529 — API surchargée, réessaie');
+      throw new Error(resp.status + ' — ' + (msg || txt || 'Erreur API'));
+    }
     return resp;
   } catch(e) {
     clearTimeout(timer);
