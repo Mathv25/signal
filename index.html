@@ -324,7 +324,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const API    = 'https://api.anthropic.com/v1/messages';
-const MODEL  = 'claude-sonnet-4-6';  // modele correct
+const MODEL  = 'claude-3-5-sonnet-20241022';
 let KEY = '';
 let selectedTF = '1d';
 const TF_LABELS = {'15m':'15 minutes','1h':'1 heure','4h':'4 heures','1d':'journalier','1w':'hebdomadaire'};
@@ -373,7 +373,7 @@ async function callAI(body) {
       body: JSON.stringify({...body, model: MODEL})
     });
     clearTimeout(timer);
-    if (resp.status === 400) { const e400=await resp.json().catch(()=>({})); throw new Error('400 — '+(e400.error?.message||JSON.stringify(e400)||'Requête invalide')); }
+    if (resp.status === 400) { const txt=await resp.text().catch(()=>''); let msg=''; try{const e=JSON.parse(txt);msg=e.error?.message||'';}catch(x){msg=txt;} throw new Error('400 — '+(msg||txt||'Requête invalide')); }
     if (resp.status === 429) throw new Error('429 — Limite API atteinte, attends 30s et réessaie');
     if (resp.status === 401) throw new Error('401 — Clé API invalide');
     if (resp.status === 529) throw new Error('529 — API surchargée, réessaie');
